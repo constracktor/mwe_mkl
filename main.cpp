@@ -1,4 +1,3 @@
-#include <cmath>
 #include <random>
 #include <iostream>
 #include <chrono>
@@ -6,7 +5,7 @@
 
 #include "mkl_adapter.hpp"
 
-#define CALC_TYPE double
+#define CALC_TYPE float//double
 
 int main(int argc, char* argv[])
 {
@@ -15,15 +14,13 @@ int main(int argc, char* argv[])
   // define exponents of 10
   std::size_t exp_start = 1;
   std::size_t exp_stop = 3;
-  // define early stop;
-  std::size_t early_stop = 10 * pow(10, exp_stop - 1);
   // runtime data holder
   std::size_t total_potrf;
   std::size_t total_trsm;
-  std::size_t total_syrk
+  std::size_t total_syrk;
   std::size_t total_gemm;
   // timer
-  auto t = std::chrono::high_resolution_timer();
+  auto t = std::chrono::steady_clock();
   // create logscale n vector
   std::vector<std::size_t> n_vector;
   n_vector.resize(9 * (exp_stop - exp_start) + 1);
@@ -48,11 +45,6 @@ int main(int argc, char* argv[])
   {
     std::size_t n_dim = n_vector[k];
     std::size_t m_size = n_dim * n_dim;
-    // early stopping
-    if (early_stop < n_dim)
-    {
-      break;
-    }
     // reset data holders
     total_potrf = 0;
     total_trsm = 0;
@@ -73,7 +65,7 @@ int main(int argc, char* argv[])
         std::vector<CALC_TYPE> M_pos_2(m_size);
         std::vector<CALC_TYPE> M_1(m_size);
         std::vector<CALC_TYPE> M_2(m_size);
-        std::vector<CALC_TYPE> M_2(m_size);
+        std::vector<CALC_TYPE> M_3(m_size);
         // initialize matrices with random values
         for (size_t i = 0; i < m_size; i++)
         {
@@ -94,39 +86,40 @@ int main(int argc, char* argv[])
         {
             M_pos_1[i * n_dim + i] = M_pos_1[i * n_dim + i] + n_dim;
         }
-        //
-        M_pos_2 = std::copy(M_pos_1);
-        M_2 = std::copy(M_1);
-        M_3 = std::copy(M_1);
+        // copy missing matrices
+        M_pos_2 = M_pos_1;
+        M_2 = M_1;
+        M_3 = M_1;
         ////////////////////////////////////////////////////////////////////////////
         // benchmark
         // time cholesky decomposition
         auto start_potrf = t.now();
-        potrf(M_pos_1, n_dim);
+        mkl_potrf(M_pos_1, n_dim);
         auto stop_potrf = t.now();
         // time triangular solve
         auto start_trsm = t.now();
-        trsm(M_1, M_pos_1, n_dim);
+        mkl_trsm(M_1, M_pos_1, n_dim);
         auto stop_trsm = t.now();
-        trsm(M_2, M_pos_1, n_dim);
+        mkl_trsm(M_2, M_pos_1, n_dim);
         // time symmetrik k rank update solve
         auto start_syrk = t.now();
-        syrk(M_pos_2, M_1, n_dim);
+        mkl_syrk(M_pos_2, M_1, n_dim);
         auto stop_syrk = t.now();
         // time matrix multiplication
         auto start_gemm = t.now();
-        gemm(M_3, M_1, M_2, n_dim);
+        mkl_gemm(M_3, M_1, M_2, n_dim);
         auto stop_gemm = t.now();
         ////////////////////////////////////////////////////////////////////////////
         // add time difference to total time
-        total_potrf += stop_potrf - start_potrf;
-        total_trsm += stop_trsm - start_trsm;
-        total_syrk += stop_syrk - start_syrk;
-        total_gemm += stop_gemm - start_gemm;
+        total_potrf += std::chrono::duration_cast<std::chrono::microseconds>(stop_potrf - start_potrf).count();
+        total_trsm += std::chrono::duration_cast<std::chrono::microseconds>(stop_trsm - start_trsm).count();
+        total_syrk += std::chrono::duration_cast<std::chrono::microseconds>(stop_syrk - start_syrk).count();
+        total_gemm += std::chrono::duration_cast<std::chrono::microseconds>(stop_gemm - start_gemm).count();
     }
     std::cout <<  n_dim << ";"
-              <<  total_potrf / n_loop << ";"
-              <<  total_trsm / n_loop << ";"
-              <<  total_gemm / n_loop << ";\n";
+              <<  total_potrf / 1000000.0 / n_loop << ";"
+              <<  total_trsm / 1000000.0 / n_loop << ";"
+              <<  total_syrk / 1000000.0 / n_loop << ";"
+              <<  total_gemm / 1000000.0 / n_loop << ";\n";
   }
 }

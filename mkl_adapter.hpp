@@ -1,6 +1,6 @@
-//#include "mkl.h
-#include "mkl_cblas.h"
-#include "mkl_lapacke.h"
+#include "mkl.h"
+//#include "mkl_cblas.h"
+//#include "mkl_lapacke.h"
 
 #include <vector>
 ////////////////////////////////////////////////////////////////////////////////
@@ -62,8 +62,6 @@ void mkl_potrf(std::vector<double>& A,
   // use ?potrf2 recursive version for better stability
   // POTRF  
   LAPACKE_dpotrf2(LAPACK_ROW_MAJOR, 'L', N, A.data(), N);
-  // return vector
-  return A;
 }
 
 // in-place solve L * X = A^T where L triangular
