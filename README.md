@@ -26,6 +26,20 @@ Cholesky-Bench benchmarks right-looking tiled Cholesky factorization across a sp
 | `loop_two` | Collapsed fork-join with dynamic schedule for trailing-update |
 | `async_void` |  Fully asynchronous tasking with dataflow using `hpx::shared_future<void>` |
 
+### Standard C++ (`cpp_standard/`)
+
+A pure standard-library port of the HPX implementation: tasking is expressed with `std::future`/`std::shared_future` and `std::async`, and fork-join with the parallel `std::for_each` (`std::execution::par`). There is no runtime dependency beyond a C++20 toolchain (plus Intel TBB to back the parallel algorithms on libstdc++). The five modes line up one-to-one with the HPX variants so the two back ends can be compared directly. `hpx::dataflow` is emulated by launching each task with `std::async(std::launch::async, …)` and having the task block on its dependency futures before running — the honest std-library analogue of an asynchronous many-task runtime, with one OS thread per task rather than a lightweight user-space scheduler.
+
+| Mode | Description |
+|------|-------------|
+| `async_future` | Fully asynchronous tasking with `std::async`-based dataflow using `std::shared_future<vector>` |
+| `sync_future` | Manually synchronized tasking with `std::async`-based dataflow using `std::shared_future<vector>` |
+| `loop_one` | Naive fork-join: parallel `std::for_each` over rows, sequential trailing-update sweep |
+| `loop_two` | Collapsed fork-join: nested parallel `std::for_each` over the trailing-update |
+| `async_void` | Fully asynchronous tasking with `std::async`-based dataflow using `std::shared_future<void>` |
+
+> Note: `std::async` spawns a genuine OS thread per task and each task blocks on its dependency futures, so the asynchronous variants do not scale to the very large tile counts an HPX run handles comfortably; keep `n_tiles` modest for the `async_*` modes. This is the intended point of comparison, not a defect.
+
 ### Reference (`reference/`)
 
 | Mode | Description |
