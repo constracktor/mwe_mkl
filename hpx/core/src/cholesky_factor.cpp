@@ -1,3 +1,9 @@
+// Copyright (c) 2026 Alexander Strack
+//
+// SPDX-License-Identifier: BSL-1.0
+// Distributed under the Boost Software License, Version 1.0. (See accompanying
+// file LICENSE_1_0.txt or copy at http://www.boost.org/LICENSE_1_0.txt)
+
 #include "cholesky_factor.hpp"
 
 #include "adapter_cblas_fp64.hpp"
@@ -131,7 +137,10 @@ void right_looking_cholesky_tiled(Variant variant, Tiled_future_matrix &ft_tiles
                 }
             }
             break;
-        default: std::cout << "Variant not supported.\n"; break;
+        default:
+            // clang-format off
+            std::cout << "Variant not supported."; break;
+            // clang-format on
     }
 }
 
@@ -245,7 +254,10 @@ void right_looking_cholesky_tiled_loop(Variant variant, Tiled_vector_matrix &til
                     });
             }
             break;
-        default: std::cout << "Variant not supported.\n"; break;
+        default:
+            // clang-format off
+            std::cout << "Variant not supported."; break;
+            // clang-format on
     }
 }
 
