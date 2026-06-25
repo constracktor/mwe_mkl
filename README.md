@@ -2,7 +2,7 @@
 
 <img align="right" width="20%" src="/images/cholesky_bench_logo.jpeg">
 
-Cholesky-Bench benchmarks right-looking tiled Cholesky factorization across a spectrum of parallelization strategies, from classical fork-join to fully asynchronous task graphs, covering multiple parallelism models including state-of-the-art asynchronous many-task runtimes. Currently OpenMP and [HPX](https://github.com/TheHPXProject/hpx) are supported, each with five parallel implementations. A non-tiled parallel reference using LAPACKE and optionally [PLASMA](https://github.com/icl-utk-edu/plasma) is also included as a baseline.
+Cholesky-Bench benchmarks right-looking tiled Cholesky factorization across a spectrum of parallelization strategies, from classical fork-join to fully asynchronous task graphs, covering multiple parallelism models including state-of-the-art asynchronous many-task runtimes. Currently OpenMP and [HPX](https://github.com/TheHPXProject/hpx) are supported, each with five parallel implementations, along with a [TTG](https://github.com/TESSEorg/ttg) dataflow implementation. A non-tiled parallel reference using LAPACKE and optionally [PLASMA](https://github.com/icl-utk-edu/plasma) is also included as a baseline.
 
 ## Variants
 
@@ -26,6 +26,12 @@ Cholesky-Bench benchmarks right-looking tiled Cholesky factorization across a sp
 | `loop_two` | Collapsed fork-join with dynamic schedule for trailing-update |
 | `async_void` |  Fully asynchronous tasking with dataflow using `hpx::shared_future<void>` |
 
+### TTG (`ttg/`)
+
+| Mode | Description |
+|------|-------------|
+| `flow` | Fully asynchronous tiled factorization expressed as a [TTG](https://github.com/TESSEorg/ttg) task graph (dispatcher → POTRF → TRSM → SYRK/GEMM), an equivalent shared-memory CPU port of the upstream [`examples/potrf`](https://github.com/TESSEorg/ttg/tree/master/examples/potrf) (device and distributed paths stripped) |
+
 ### Reference (`reference/`)
 
 | Mode | Description |
@@ -46,28 +52,30 @@ The benchmark handles this transparently:
 
 ## Dependencies
 
-All three implementations are built with CMake (≥ 3.23) and C++20. The OpenMP and HPX directories link against a *sequential* BLAS (parallelism is at the tile level); the `reference/` directory links against a *threaded* BLAS instead.
+All four implementations are built with CMake (≥ 3.23) and C++20. The OpenMP, HPX, and TTG directories link against a *sequential* BLAS (parallelism is at the tile level); the `reference/` directory links against a *threaded* BLAS instead.
 
-| Dependency | OpenMP | HPX | Reference |
-|---|---|---|---|
-| OpenBLAS 0.3.28 (sequential) | ✓ (default) | ✓ (default) | — |
-| OpenBLAS 0.3.28 (`threads=openmp`) | — | — | ✓ (default) |
-| Intel oneMKL (sequential) | optional (`ENABLE_MKL=ON`) | optional (`ENABLE_MKL=ON`) | — |
-| Intel oneMKL (`intel_thread`) | — | — | optional (`ENABLE_MKL=ON`) |
-| PLASMA 24.8.7 | — | — | optional (`ENABLE_PLASMA=ON`) |
-| HPX 1.11.0 + jemalloc | — | ✓ | — |
-| GCC 14.2.0 | ✓ | ✓ | ✓ |
-| LLVM/Clang 22.1.2 | optional | — | — |
+| Dependency | OpenMP | HPX | TTG | Reference |
+|---|---|---|---|---|
+| OpenBLAS 0.3.28 (sequential) | ✓ (default) | ✓ (default) | ✓ (default) | — |
+| OpenBLAS 0.3.28 (`threads=openmp`) | — | — | — | ✓ (default) |
+| Intel oneMKL (sequential) | optional (`ENABLE_MKL=ON`) | optional (`ENABLE_MKL=ON`) | optional (`ENABLE_MKL=ON`) | — |
+| Intel oneMKL (`intel_thread`) | — | — | — | optional (`ENABLE_MKL=ON`) |
+| PLASMA 24.8.7 | — | — | — | optional (`ENABLE_PLASMA=ON`) |
+| HPX 1.11.0 + jemalloc | — | ✓ | — | — |
+| TTG (PaRSEC backend) | — | — | ✓ | — |
+| GCC 14.2.0 | ✓ | ✓ | ✓ | ✓ |
+| LLVM/Clang 22.1.2 | optional | — | — | — |
 
 Dependencies are managed via [Spack](https://spack.io/).
 
 ## Build
 
-From within the `openmp/`, `hpx/`, or `reference/` directory, run:
+From within the `openmp/`, `hpx/`, `ttg/`, or `reference/` directory, run:
 
 ```bash
 ./compile.sh [gcc|llvm]   # OpenMP:    gcc (default) or llvm
 ./compile.sh              # HPX:       always gcc
+./compile.sh              # TTG:       always gcc
 ./compile.sh              # Reference: always gcc
 ```
 
@@ -79,10 +87,10 @@ These can be set as environment variables before calling `compile.sh`:
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `ENABLE_VALIDATION` | `OFF` | After each factorization, compute the relative residual ‖A − LL^T‖_F / ‖A‖_F and warn if it exceeds 1e-10. In `openmp/` and `hpx/`, mutually exclusive with `DISABLE_COMPUTATION`. |
-| `DISABLE_COMPUTATION` | `OFF` | *(`openmp/` and `hpx/` only)* Replace all BLAS/tile-generation calls with no-ops. The task graph and loops remain intact, so scheduling overhead can be measured in isolation. |
+| `ENABLE_VALIDATION` | `OFF` | After each factorization, compute the relative residual ‖A − LL^T‖_F / ‖A‖_F and warn if it exceeds 1e-10. In `openmp/`, `hpx/`, and `ttg/`, mutually exclusive with `DISABLE_COMPUTATION`. |
+| `DISABLE_COMPUTATION` | `OFF` | *(`openmp/`, `hpx/`, and `ttg/` only)* Replace all BLAS/tile-generation calls with no-ops. The task graph and loops remain intact, so scheduling overhead can be measured in isolation. |
 | `ENABLE_DYNAMIC_SCHEDULE` | `OFF` | *(`openmp/` only)* Use `schedule(dynamic,1)` on the trailing-update worksharing loops in `for_collapse`. Requires the LLVM toolchain; rejected at compile time with GCC. |
-| `ENABLE_MKL` | `OFF` | Link against Intel oneMKL instead of OpenBLAS. In `openmp/` and `hpx/` this is the *sequential* MKL; in `reference/` it is the *threaded* MKL. |
+| `ENABLE_MKL` | `OFF` | Link against Intel oneMKL instead of OpenBLAS. In `openmp/`, `hpx/`, and `ttg/` this is the *sequential* MKL; in `reference/` it is the *threaded* MKL. |
 | `ENABLE_PLASMA` | `OFF` | *(`reference/` only)* Also build the PLASMA `plasma_dpotrf` variant. Adds a `plasma` column alongside `lapacke` in the runtime output. |
 | `ENABLE_LAPACKE` | `ON` | *(`reference/` only)* Run the `lapacke` mode at runtime. Set `OFF` to skip it (e.g. when only `plasma` is wanted). Linking is unchanged either way — PLASMA and validation still need cblas/lapacke symbols. |
 
@@ -125,6 +133,12 @@ OMP_NUM_THREADS=128 OMP_PROC_BIND=close OMP_PLACES=cores \
   --loop=1 --size_start=1024 --size_stop=65536 \
   --tiles_start=64 --tiles_stop=64
 
+# TTG
+./build/cholesky_ttg \
+  --threads=128 \
+  --loop=1 --size_start=1024 --size_stop=65536 \
+  --tiles_start=64 --tiles_stop=64
+
 # Reference (parallel BLAS, no tiling)
 OMP_NUM_THREADS=128 OMP_PROC_BIND=close OMP_PLACES=cores \
   ./build/cholesky_reference \
@@ -133,12 +147,13 @@ OMP_NUM_THREADS=128 OMP_PROC_BIND=close OMP_PLACES=cores \
 
 ### Via SLURM
 
-All three directories contain a `run.sh` that is a ready-to-submit SLURM batch script (128 CPUs, exclusive node, 144-hour wall time):
+All four directories contain a `run.sh` that is a ready-to-submit SLURM batch script (128 CPUs, exclusive node, 144-hour wall time):
 
 ```bash
 sbatch openmp/run.sh             # gcc runtime (default)
 sbatch openmp/run.sh llvm        # llvm runtime
 sbatch hpx/run.sh
+sbatch ttg/run.sh
 sbatch reference/run.sh          # gcc runtime; defaults to N=65280 (see PLASMA boundary note)
 ```
 
@@ -157,6 +172,7 @@ Results are appended to a text file in the working directory:
 ```
 runtimes_openmp_cholesky_<suffix>.txt
 runtimes_hpx_cholesky_<suffix>.txt
+runtimes_ttg_cholesky_<suffix>.txt
 runtimes_reference_cholesky_<suffix>.txt
 ```
 
@@ -168,7 +184,7 @@ The `reference/` binary reports a `lapacke` column (suppressed by `ENABLE_LAPACK
 
 ```
 .
-├── .clang-format           # repo-wide style; governs all three subtrees
+├── .clang-format           # repo-wide style; governs all subtrees
 ├── CMakeLists.txt          # top-level coordinator (formatting only; LANGUAGES NONE)
 ├── openmp/
 │   ├── CMakeLists.txt
@@ -189,6 +205,24 @@ The `reference/` binary reports a `lapacke` column (suppressed by `ENABLE_LAPACK
 │           ├── validate.cpp
 │           └── adapter_cblas_fp64.cpp
 ├── hpx/
+│   ├── CMakeLists.txt
+│   ├── compile.sh          # build script (gcc only)
+│   ├── run.sh              # SLURM job script
+│   ├── main.cpp
+│   └── core/
+│       ├── include/
+│       │   ├── cholesky_factor.hpp
+│       │   ├── functions.hpp
+│       │   ├── tile_generation.hpp
+│       │   ├── validate.hpp
+│       │   └── adapter_cblas_fp64.hpp
+│       └── src/
+│           ├── cholesky_factor.cpp
+│           ├── functions.cpp
+│           ├── tile_generation.cpp
+│           ├── validate.cpp
+│           └── adapter_cblas_fp64.cpp
+├── ttg/
 │   ├── CMakeLists.txt
 │   ├── compile.sh          # build script (gcc only)
 │   ├── run.sh              # SLURM job script
@@ -240,7 +274,7 @@ cmake --build build-fmt --target check-clang-format   # CI-style check
 cmake --build build-fmt --target fix-clang-format     # apply formatting
 ```
 
-Each subproject (`openmp/`, `hpx/`, `reference/`) is its own standalone CMake project with its own dependencies, so the top-level `CMakeLists.txt` only handles formatting. The actual builds still happen from inside each subdirectory via its `compile.sh`.
+Each subproject (`openmp/`, `hpx/`, `ttg/`, `reference/`) is its own standalone CMake project with its own dependencies, so the top-level `CMakeLists.txt` only handles formatting. The actual builds still happen from inside each subdirectory via its `compile.sh`.
 
 ## Contributing
 
